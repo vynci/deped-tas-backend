@@ -89,6 +89,37 @@ app.get('/wifi-settings/:oldssid/:newssid/:oldpass/:newpass', function(req, res)
 	});
 });
 
+app.get('/media-usb', function(req, res) {
+
+	var exec = require('child_process').exec;
+	exec('sudo blkid', function(error, stdout, stderr) {
+		if (error !== null) {
+			console.log('exec error: ' + error);
+		}
+		else{
+			if(stringContains(stdout.toString(), '/dev/sda')){
+				var exec1 = require('child_process').exec;
+				exec1('ls /media/usb', function(error, stdout, stderr) {
+					if (error !== null) {
+						console.log('exec error: ' + error);
+						res.json({ status: 301, message: 'error' });
+					}
+					else{
+						var tmp = stdout.toString();
+						tmp = tmp.split('\n');
+						res.json({ status: 200, message: tmp });
+					}
+				});
+			}else{
+				res.json({ status: 301, message: 'error' });
+			}
+
+		}
+	});
+
+
+});
+
 app.get('/system-time/:time', function(req, res) {
 
 	var time = req.params.time
@@ -283,6 +314,7 @@ app.get('/admin/reset-password', function(req, res) {
 
 
 
+
 // Serve the Parse API on the /parse URL prefix
 var mountPath = process.env.PARSE_MOUNT || '/parse';
 app.use(mountPath, api);
@@ -291,6 +323,7 @@ var port = process.env.PORT || 1337;
 var httpServer = require('http').createServer(app);
 httpServer.listen(port, function() {
 	console.log('parse-server-example running on port ' + port + '.');
+	disableAltKey();
 });
 
 // This will enable the Live Query real-time server
@@ -357,6 +390,7 @@ var Settings = Parse.Object.extend("Settings");
 var query = new Parse.Query(Settings);
 var settingsCutoffTime = '';
 var enableOvertimeOption = '';
+var userLogInterval = 60;
 
 query.equalTo("objectId", 'EpS16KPDOv');
 
@@ -384,7 +418,7 @@ query.find({
 		});
 	},
 	error: function(error) {
-		alert("Error: " + error.code + " " + error.message);
+		console("Error: " + error.code + " " + error.message);
 	}
 });
 
@@ -409,129 +443,361 @@ function createDailyLog(data, isFromRFID){
 			success: function(result) {
 				if(result.length !== 0){
 					var dateNow = new Date();
-					dateNow = dateNow.getDate().toString() + dateNow.getMonth().toString() + dateNow.getFullYear().toString();
-
 					var currentEmployee = result[0];
-					var today = new Date();
-
-					var h = today.getHours();
-					var hTimeInDecimals = today.getHours();
-
-					var period = 'PM';
-
-					if(h < 12){
-						period = 'AM';
+					var tmp = currentEmployee.get('lastLog');
+					var lastLog = new Date(tmp);
+					if(!tmp){
+						lastLog = new Date();
 					}
 
-					var m = today.getMinutes();
-					var s = today.getSeconds();
-					h = checkAMPM(h);
-					m = checkTime(m);
-					s = checkTime(s);
+					var seconds = (dateNow.getTime() - lastLog.getTime()) / 1000;
+					console.log('tmp: ', tmp);
+					console.log('date-now: ', dateNow.getTime());
+					console.log('last-log: ', lastLog.getTime());
 
-					var timeInDecimals = hTimeInDecimals + m/100;
+					console.log('seconds: ', seconds);
 
-					var time = h + ":" + m + ":" + s + ' ' + period;
-					var forPeriodTime = h + ":" + m  + ' ' + period;
+					if(seconds > userLogInterval || tmp === undefined || tmp === null){
+						dateNow = dateNow.getDate().toString() + dateNow.getMonth().toString() + dateNow.getFullYear().toString();
+						var today = new Date();
 
-					var DailyLog = Parse.Object.extend("DailyLog");
-					var dailyLog = new DailyLog();
+						var h = today.getHours();
+						var hTimeInDecimals = today.getHours();
 
-					dailyLog.set("firstName", result[0].attributes.firstName);
-					dailyLog.set("lastName", result[0].attributes.lastName);
-					dailyLog.set("position", result[0].attributes.position);
-					dailyLog.set("idNumber", result[0].attributes.employeeId);
-					dailyLog.set("employeeId", result[0].id);
+						var period = 'PM';
 
-					if(result[0].attributes.isCheckedIn){
-						currentEmployee.set("isCheckedIn", false);
-					} else {
-						currentEmployee.set("isCheckedIn", true);
-					}
+						if(h < 12){
+							period = 'AM';
+						}
 
-					if(result[0].attributes.currentPeriodLog.sequence === 0 && currentEmployee.attributes.endDateLog !== dateNow){
-						dailyLog.set("time", time + '- Log-In');
-					}else{
-						if(result[0].attributes.currentPeriodLog.sequence === 1){
-							if(currentEmployee.attributes.currentPeriodLog.createdDate !== dateNow){
-								dailyLog.set("time", time + '- Log-In');
-							}else{
-								dailyLog.set("time", time + '- Break-Out');
-							}
-							if(isTwoLogsEnable){
-								dailyLog.set("time", time + '- Log-Out');
-							}
+						var m = today.getMinutes();
+						var s = today.getSeconds();
+						h = checkAMPM(h);
+						m = checkTime(m);
+						s = checkTime(s);
 
-						}else if(result[0].attributes.currentPeriodLog.sequence === 2){
-							if(currentEmployee.attributes.currentPeriodLog.createdDate !== dateNow){
-								dailyLog.set("time", time + '- Log-In');
-							}else{
-								dailyLog.set("time", time + '- Break-In');
-							}
+						var timeInDecimals = hTimeInDecimals + m/100;
+
+						var time = h + ":" + m + ":" + s + ' ' + period;
+						var forPeriodTime = h + ":" + m  + ' ' + period;
+
+						var DailyLog = Parse.Object.extend("DailyLog");
+						var dailyLog = new DailyLog();
+
+						dailyLog.set("firstName", result[0].attributes.firstName);
+						dailyLog.set("lastName", result[0].attributes.lastName);
+						dailyLog.set("position", result[0].attributes.position);
+						dailyLog.set("idNumber", result[0].attributes.employeeId);
+						dailyLog.set("employeeId", result[0].id);
+
+						if(result[0].attributes.isCheckedIn){
+							currentEmployee.set("isCheckedIn", false);
+						} else {
+							currentEmployee.set("isCheckedIn", true);
+						}
+
+						if(result[0].attributes.currentPeriodLog.sequence === 0 && currentEmployee.attributes.endDateLog !== dateNow){
+							dailyLog.set("time", time + '- Log-In');
 						}else{
-							if(result[0].attributes.currentPeriodLog.id === null && currentEmployee.attributes.endDateLog !== null){
-								dailyLog.set("time", time + '-Extra Log');
-							}else{
+							if(result[0].attributes.currentPeriodLog.sequence === 1){
 								if(currentEmployee.attributes.currentPeriodLog.createdDate !== dateNow){
 									dailyLog.set("time", time + '- Log-In');
 								}else{
+									dailyLog.set("time", time + '- Break-Out');
+								}
+								if(isTwoLogsEnable){
 									dailyLog.set("time", time + '- Log-Out');
+								}
+
+							}else if(result[0].attributes.currentPeriodLog.sequence === 2){
+								if(currentEmployee.attributes.currentPeriodLog.createdDate !== dateNow){
+									dailyLog.set("time", time + '- Log-In');
+								}else{
+									dailyLog.set("time", time + '- Break-In');
+								}
+							}else{
+								if(result[0].attributes.currentPeriodLog.id === null && currentEmployee.attributes.endDateLog !== null){
+									dailyLog.set("time", time + '-Extra Log');
+								}else{
+									if(currentEmployee.attributes.currentPeriodLog.createdDate !== dateNow){
+										dailyLog.set("time", time + '- Log-In');
+									}else{
+										dailyLog.set("time", time + '- Log-Out');
+									}
 								}
 							}
 						}
-					}
 
-					if(currentEmployee.attributes.currentPeriodLog.id === null && currentEmployee.attributes.endDateLog === dateNow){
-						currentEmployee.set("isCheckedIn", false);
-					}
+						if(currentEmployee.attributes.currentPeriodLog.id === null && currentEmployee.attributes.endDateLog === dateNow){
+							currentEmployee.set("isCheckedIn", false);
+						}
+						currentEmployee.set("lastLog", new Date());
 
-					currentEmployee.save(null, {
-						success: function(result) {
-							dailyLog.save(null, {
-								success: function(result) {
-									// Execute any logic that should take place after the object is saved.
+						currentEmployee.save(null, {
+							success: function(result) {
+								dailyLog.save(null, {
+									success: function(result) {
+										// Execute any logic that should take place after the object is saved.
 
-									if (currentEmployee.get('isCrossDate')) {
-										var PeriodLog = Parse.Object.extend("PeriodLog");
-										var periodLog = new PeriodLog();
-										var isNewLog = true;
+										if (currentEmployee.get('isCrossDate')) {
+											var PeriodLog = Parse.Object.extend("PeriodLog");
+											var periodLog = new PeriodLog();
+											var isNewLog = true;
 
-										if(currentEmployee.attributes.currentPeriodLog.id){
-											var currentPeriodDate = new Date();
-											var totalTime = getDateDiff(currentEmployee.attributes.currentPeriodLog.loginDate, converDateString(currentPeriodDate));
-											isNewLog = false;
-											periodLog.id = currentEmployee.attributes.currentPeriodLog.id;
-											periodLog.set('logoutDate', converDateString(currentPeriodDate));
-											periodLog.set('totalTime', totalTime.toString());
-										}else{
-											var currentPeriodDate = new Date();
-											periodLog.set('isCrossDate', true);
-											periodLog.set("employeeId", currentEmployee.id);
-											periodLog.set("periodDate", currentPeriodDate);
-											periodLog.set("name", currentEmployee.attributes.firstName + ' ' + currentEmployee.attributes.lastName);
-											periodLog.set('loginDate', converDateString(currentPeriodDate));
-										}
+											if(currentEmployee.attributes.currentPeriodLog.id){
+												var currentPeriodDate = new Date();
+												var totalTime = getDateDiff(currentEmployee.attributes.currentPeriodLog.loginDate, converDateString(currentPeriodDate));
+												isNewLog = false;
+												periodLog.id = currentEmployee.attributes.currentPeriodLog.id;
+												periodLog.set('logoutDate', converDateString(currentPeriodDate));
+												periodLog.set('totalTime', totalTime.toString());
+											}else{
+												var currentPeriodDate = new Date();
+												periodLog.set('isCrossDate', true);
+												periodLog.set("employeeId", currentEmployee.id);
+												periodLog.set("periodDate", currentPeriodDate);
+												periodLog.set("name", currentEmployee.attributes.firstName + ' ' + currentEmployee.attributes.lastName);
+												periodLog.set('loginDate', converDateString(currentPeriodDate));
+											}
 
-										periodLog.save({
-											success : function(result){
-												var currentPeriodLogId = result.id;
-												var logoutDate = '';
-												var loginDate = converDateString(currentPeriodDate);
+											periodLog.save({
+												success : function(result){
+													var currentPeriodLogId = result.id;
+													var logoutDate = '';
+													var loginDate = converDateString(currentPeriodDate);
 
-												if(!isNewLog){
-													currentPeriodLogId = null;
-													loginDate = currentEmployee.attributes.currentPeriodLog.loginDate;
-													logoutDate = converDateString(currentPeriodDate);
+													if(!isNewLog){
+														currentPeriodLogId = null;
+														loginDate = currentEmployee.attributes.currentPeriodLog.loginDate;
+														logoutDate = converDateString(currentPeriodDate);
+													}
+
+													currentEmployee.set("currentPeriodLog", {
+														id: currentPeriodLogId,
+														loginDate : loginDate,
+														logoutDate : logoutDate
+													});
+
+													currentEmployee.save(null, {
+														success: function(gameScore) {
+															io.emit('fromPublicServer', currentEmployee);
+															if(isFromRFID){
+																serialPort.write('detect:trigger' + "\n", function() {});
+															}
+														},
+														error: function(gameScore, error) {
+															// Execute any logic that should take place if the save fails.
+															// error is a Parse.Error with an error code and message.
+															console.log('Failed to create new object, with error code: ' + error.message);
+														}
+													});
+												},
+												error : function(){
+
+												}
+											});
+
+										} else {
+											var PeriodLog = Parse.Object.extend("PeriodLog");
+											var periodLog = new PeriodLog();
+											var periodSeq = currentEmployee.attributes.currentPeriodLog.sequence;
+											var isPeriodDone = false;
+											var isPeriodLogFull = false;
+
+											if(currentEmployee.attributes.currentPeriodLog.createdDate !== dateNow){
+												console.log('force reset');
+												currentEmployee.set("currentPeriodLog", {
+													id: null,
+													date: null,
+													sequence: 0,
+													totalTime : 0
+												});
+											}
+
+											if(currentEmployee.attributes.currentPeriodLog.id === null && currentEmployee.attributes.endDateLog !== dateNow){
+												console.log('State 1');
+												if(currentEmployee.attributes.currentPeriodLog.sequence === 0){
+													console.log(period);
+													var createdAt = new Date();
+													periodLog.set("employeeId", currentEmployee.id);
+													periodLog.set("name", currentEmployee.attributes.firstName + ' ' + currentEmployee.attributes.lastName);
+													periodLog.set("periodDate", createdAt);
+
+													if(isCutOffTime){
+														if(timeInDecimals >= settingsCutoffTime){
+															periodLog.set("arrivalPM", forPeriodTime);
+															periodSeq = 3;
+														}
+
+														else {
+															periodLog.set("arrivalAM", forPeriodTime);
+															periodSeq = 1;
+														}
+													} else {
+														periodLog.set("arrivalAM", forPeriodTime);
+														periodSeq = 1;
+													}
+
+												}
+											}
+											else if(currentEmployee.attributes.currentPeriodLog.id === null && currentEmployee.attributes.endDateLog === dateNow){
+												console.log('State 2');
+												isPeriodLogFull = true;
+												periodLog.id = currentEmployee.attributes.lastDepartArrive.id;
+											}
+											else {
+												console.log('State 3');
+												periodLog.id = currentEmployee.attributes.currentPeriodLog.id;
+												if(!isTwoLogsEnable){
+													if(currentEmployee.attributes.currentPeriodLog.sequence === 1){
+														periodLog.set("departureAM", forPeriodTime);
+														periodSeq = 2;
+													}
+													else if(currentEmployee.attributes.currentPeriodLog.sequence === 2){
+														periodLog.set("arrivalPM", forPeriodTime);
+														periodSeq = 3;
+													}
+													else if(currentEmployee.attributes.currentPeriodLog.sequence === 3){
+														periodLog.set("departurePM", forPeriodTime);
+														periodSeq = 0;
+														isPeriodDone = true;
+													}
+												}else{
+													periodLog.set("departurePM", forPeriodTime);
+													periodSeq = 0;
+													isPeriodDone = true;
 												}
 
-												currentEmployee.set("currentPeriodLog", {
-													id: currentPeriodLogId,
-													loginDate : loginDate,
-													logoutDate : logoutDate
-												});
+											}
 
-												currentEmployee.save(null, {
-													success: function(gameScore) {
+											if(!isPeriodLogFull){
+												periodLog.save(null, {
+													success: function(result) {
+														// Execute any logic that should take place after the object is saved.
+
+														var GameScore = Parse.Object.extend("PeriodLog");
+														var query = new Parse.Query(GameScore);
+														query.get(result.id, {
+															success: function(gameScore) {
+																// The object was retrieved successfully.
+
+																var total = 0;
+																var departArrive = {
+																	arrivalAM : gameScore.get('arrivalAM'),
+																	departureAM :gameScore.get('departureAM'),
+																	arrivalPM : gameScore.get('arrivalPM'),
+																	departurePM : gameScore.get('departurePM')
+																}
+
+																if(periodSeq === 2){
+																	console.log('arrivalAM');
+																	console.log(gameScore.get('arrivalAM'));
+
+																	console.log('departureAM');
+																	console.log(gameScore.get('departureAM'));
+																	total = timeDifference(gameScore.get('arrivalAM'), gameScore.get('departureAM'));
+																}
+
+																if(periodSeq === 0 && isPeriodDone){
+																	if(!isTwoLogsEnable){
+																		total = timeDifference(gameScore.get('arrivalPM'), gameScore.get('departurePM'));
+																		total = total + currentEmployee.attributes.currentPeriodLog.totalTime;
+																	}else{
+																		total = timeDifference(gameScore.get('arrivalAM'), gameScore.get('departurePM'));
+																		total = total + currentEmployee.attributes.currentPeriodLog.totalTime;
+																	}
+
+
+																	if(!enableOvertimeOption){
+																		if(total > 480){
+																			total = 480;
+																		}
+																	}
+
+																	gameScore.set("totalTime", total.toString());
+
+																	gameScore.save(null, {
+																		success: function(gameScore) {
+																			// Execute any logic that should take place after the object is saved.
+																			console.log('period log done!');
+																		},
+																		error: function(gameScore, error) {
+																			// Execute any logic that should take place if the save fails.
+																			// error is a Parse.Error with an error code and message.
+																			console.log('Failed to create new object, with error code: ' + error.message);
+																		}
+																	});
+																}
+
+																if(periodSeq !== 0){
+																	var createdDateNow = new Date();
+																	createdDateNow = createdDateNow.getDate().toString() + createdDateNow.getMonth().toString() + createdDateNow.getFullYear().toString();
+
+																	currentEmployee.set("currentPeriodLog", {
+																		id: result.id,
+																		date: null,
+																		sequence: periodSeq,
+																		totalTime : total + currentEmployee.attributes.currentPeriodLog.totalTime,
+																		createdDate : createdDateNow
+																	});
+																}
+
+																else {
+																	isPeriodDone = false;
+																	currentEmployee.set("currentPeriodLog", {
+																		id: null,
+																		date: null,
+																		sequence: 0,
+																		totalTime : 0
+																	});
+																	var dateNow = new Date();
+																	dateNow = dateNow.getDate().toString() + dateNow.getMonth().toString() + dateNow.getFullYear().toString();
+
+																	departArrive.id = result.id;
+																	currentEmployee.set("endDateLog", dateNow);
+																	currentEmployee.set("lastDepartArrive", departArrive);
+																}
+
+
+																currentEmployee.save(null, {
+																	success: function(gameScore) {
+																		// Execute any logic that should take place after the object is saved.
+																		currentEmployee.set('departArrive', departArrive);
+																		io.emit('fromPublicServer', currentEmployee);
+																		if(isFromRFID){
+																			serialPort.write('detect:trigger' + "\n", function() {});
+																		}
+																		console.log('success log!');
+																	},
+																	error: function(gameScore, error) {
+																		// Execute any logic that should take place if the save fails.
+																		// error is a Parse.Error with an error code and message.
+																		console.log('Failed to create new object, with error code: ' + error.message);
+																	}
+																});
+															},
+															error: function(object, error) {
+																// The object was not retrieved successfully.
+																// error is a Parse.Error with an error code and message.
+															}
+														});
+
+
+
+													},
+													error: function(gameScore, error) {
+														// Execute any logic that should take place if the save fails.
+														// error is a Parse.Error with an error code and message.
+														console.log(error);
+													}
+												});
+											}
+											else{
+												periodLog.add('extraLogPool', forPeriodTime);
+												periodLog.save(null, {
+													success: function(result) {
+														// Execute any logic that should take place after the object is saved.
+														currentEmployee.set('departArrive', currentEmployee.attributes.lastDepartArrive);
 														io.emit('fromPublicServer', currentEmployee);
 														if(isFromRFID){
 															serialPort.write('detect:trigger' + "\n", function() {});
@@ -540,242 +806,29 @@ function createDailyLog(data, isFromRFID){
 													error: function(gameScore, error) {
 														// Execute any logic that should take place if the save fails.
 														// error is a Parse.Error with an error code and message.
-														console.log('Failed to create new object, with error code: ' + error.message);
+														console.log(error);
 													}
 												});
-											},
-											error : function(){
-
-											}
-										});
-
-									} else {
-										var PeriodLog = Parse.Object.extend("PeriodLog");
-										var periodLog = new PeriodLog();
-										var periodSeq = currentEmployee.attributes.currentPeriodLog.sequence;
-										var isPeriodDone = false;
-										var isPeriodLogFull = false;
-
-										if(currentEmployee.attributes.currentPeriodLog.createdDate !== dateNow){
-											console.log('force reset');
-											currentEmployee.set("currentPeriodLog", {
-												id: null,
-												date: null,
-												sequence: 0,
-												totalTime : 0
-											});
-										}
-
-										if(currentEmployee.attributes.currentPeriodLog.id === null && currentEmployee.attributes.endDateLog !== dateNow){
-											console.log('State 1');
-											if(currentEmployee.attributes.currentPeriodLog.sequence === 0){
-												console.log(period);
-												var createdAt = new Date();
-												periodLog.set("employeeId", currentEmployee.id);
-												periodLog.set("name", currentEmployee.attributes.firstName + ' ' + currentEmployee.attributes.lastName);
-												periodLog.set("periodDate", createdAt);
-
-												if(isCutOffTime){
-													if(timeInDecimals >= settingsCutoffTime){
-														periodLog.set("arrivalPM", forPeriodTime);
-														periodSeq = 3;
-													}
-
-													else {
-														periodLog.set("arrivalAM", forPeriodTime);
-														periodSeq = 1;
-													}
-												} else {
-													periodLog.set("arrivalAM", forPeriodTime);
-													periodSeq = 1;
-												}
 
 											}
 										}
-										else if(currentEmployee.attributes.currentPeriodLog.id === null && currentEmployee.attributes.endDateLog === dateNow){
-											console.log('State 2');
-											isPeriodLogFull = true;
-											periodLog.id = currentEmployee.attributes.lastDepartArrive.id;
-										}
-										else {
-											console.log('State 3');
-											periodLog.id = currentEmployee.attributes.currentPeriodLog.id;
-											if(!isTwoLogsEnable){
-												if(currentEmployee.attributes.currentPeriodLog.sequence === 1){
-													periodLog.set("departureAM", forPeriodTime);
-													periodSeq = 2;
-												}
-												else if(currentEmployee.attributes.currentPeriodLog.sequence === 2){
-													periodLog.set("arrivalPM", forPeriodTime);
-													periodSeq = 3;
-												}
-												else if(currentEmployee.attributes.currentPeriodLog.sequence === 3){
-													periodLog.set("departurePM", forPeriodTime);
-													periodSeq = 0;
-													isPeriodDone = true;
-												}
-											}else{
-												periodLog.set("departurePM", forPeriodTime);
-												periodSeq = 0;
-												isPeriodDone = true;
-											}
-
-										}
-
-										if(!isPeriodLogFull){
-											periodLog.save(null, {
-												success: function(result) {
-													// Execute any logic that should take place after the object is saved.
-
-													var GameScore = Parse.Object.extend("PeriodLog");
-													var query = new Parse.Query(GameScore);
-													query.get(result.id, {
-														success: function(gameScore) {
-															// The object was retrieved successfully.
-
-															var total = 0;
-															var departArrive = {
-																arrivalAM : gameScore.get('arrivalAM'),
-																departureAM :gameScore.get('departureAM'),
-																arrivalPM : gameScore.get('arrivalPM'),
-																departurePM : gameScore.get('departurePM')
-															}
-
-															if(periodSeq === 2){
-																console.log('arrivalAM');
-																console.log(gameScore.get('arrivalAM'));
-
-																console.log('departureAM');
-																console.log(gameScore.get('departureAM'));
-																total = timeDifference(gameScore.get('arrivalAM'), gameScore.get('departureAM'));
-															}
-
-															if(periodSeq === 0 && isPeriodDone){
-																if(!isTwoLogsEnable){
-																	total = timeDifference(gameScore.get('arrivalPM'), gameScore.get('departurePM'));
-																	total = total + currentEmployee.attributes.currentPeriodLog.totalTime;
-																}else{
-																	total = timeDifference(gameScore.get('arrivalAM'), gameScore.get('departurePM'));
-																	total = total + currentEmployee.attributes.currentPeriodLog.totalTime;
-																}
-
-
-																if(!enableOvertimeOption){
-																	if(total > 480){
-																		total = 480;
-																	}
-																}
-
-																gameScore.set("totalTime", total.toString());
-
-																gameScore.save(null, {
-																	success: function(gameScore) {
-																		// Execute any logic that should take place after the object is saved.
-																		console.log('period log done!');
-																	},
-																	error: function(gameScore, error) {
-																		// Execute any logic that should take place if the save fails.
-																		// error is a Parse.Error with an error code and message.
-																		console.log('Failed to create new object, with error code: ' + error.message);
-																	}
-																});
-															}
-
-															if(periodSeq !== 0){
-																var createdDateNow = new Date();
-																createdDateNow = createdDateNow.getDate().toString() + createdDateNow.getMonth().toString() + createdDateNow.getFullYear().toString();
-
-																currentEmployee.set("currentPeriodLog", {
-																	id: result.id,
-																	date: null,
-																	sequence: periodSeq,
-																	totalTime : total + currentEmployee.attributes.currentPeriodLog.totalTime,
-																	createdDate : createdDateNow
-																});
-															}
-
-															else {
-																isPeriodDone = false;
-																currentEmployee.set("currentPeriodLog", {
-																	id: null,
-																	date: null,
-																	sequence: 0,
-																	totalTime : 0
-																});
-																var dateNow = new Date();
-																dateNow = dateNow.getDate().toString() + dateNow.getMonth().toString() + dateNow.getFullYear().toString();
-
-																departArrive.id = result.id;
-																currentEmployee.set("endDateLog", dateNow);
-																currentEmployee.set("lastDepartArrive", departArrive);
-															}
-
-
-															currentEmployee.save(null, {
-																success: function(gameScore) {
-																	// Execute any logic that should take place after the object is saved.
-																	currentEmployee.set('departArrive', departArrive);
-																	io.emit('fromPublicServer', currentEmployee);
-																	if(isFromRFID){
-																		serialPort.write('detect:trigger' + "\n", function() {});
-																	}
-																	console.log('success log!');
-																},
-																error: function(gameScore, error) {
-																	// Execute any logic that should take place if the save fails.
-																	// error is a Parse.Error with an error code and message.
-																	console.log('Failed to create new object, with error code: ' + error.message);
-																}
-															});
-														},
-														error: function(object, error) {
-															// The object was not retrieved successfully.
-															// error is a Parse.Error with an error code and message.
-														}
-													});
-
-
-
-												},
-												error: function(gameScore, error) {
-													// Execute any logic that should take place if the save fails.
-													// error is a Parse.Error with an error code and message.
-													console.log(error);
-												}
-											});
-										}
-										else{
-											periodLog.add('extraLogPool', forPeriodTime);
-											periodLog.save(null, {
-												success: function(result) {
-													// Execute any logic that should take place after the object is saved.
-													currentEmployee.set('departArrive', currentEmployee.attributes.lastDepartArrive);
-													io.emit('fromPublicServer', currentEmployee);
-													if(isFromRFID){
-														serialPort.write('detect:trigger' + "\n", function() {});
-													}
-												},
-												error: function(gameScore, error) {
-													// Execute any logic that should take place if the save fails.
-													// error is a Parse.Error with an error code and message.
-													console.log(error);
-												}
-											});
-
-										}
+									},
+									error: function(gameScore, error) {
+										// Execute any logic that should take place if the save fails.
+										// error is a Parse.Error with an error code and message.
+										console.log(error);
 									}
-								},
-								error: function(gameScore, error) {
-									// Execute any logic that should take place if the save fails.
-									// error is a Parse.Error with an error code and message.
-									console.log(error);
-								}
-							});
-						},
-						error: function(gameScore, error) {
-							console.log(error);
-						}
-					});
+								});
+							},
+							error: function(gameScore, error) {
+								console.log(error);
+							}
+						});
+						// end
+					}else{
+						console.log('not yet allowed');
+						io.emit('notificationsFromServer', 'log-interval:' + seconds);
+					}
 				}
 			},
 			error: function(error) {
@@ -941,6 +994,18 @@ function deleteDailyLogs(){
 		},
 		error: function(error) {
 
+		}
+	});
+}
+
+function disableAltKey(){
+	var exec = require('child_process').exec;
+	exec('/usr/bin/xmodmap -e "keycode 64="', function(error, stdout, stderr) {
+		if (error !== null) {
+			console.log('exec error: ' + error);
+		}
+		else{
+			console.log(stdout);
 		}
 	});
 }

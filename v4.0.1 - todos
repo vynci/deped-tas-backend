@@ -1,0 +1,18 @@
+DB Update
+
+1. Employee
+		- lastLog : Date
+2. Settings
+		- userLogInterval : Number
+		- Add default 60 value
+
+3. Color Themes
+		- Update Color in Settings
+
+
+4. Raspbian Desktop
+		- Disable Menus
+
+5. File Manager - Disable Automount
+
+6. Copy -R dist , copy index.js
