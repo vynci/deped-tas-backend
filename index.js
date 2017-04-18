@@ -451,11 +451,6 @@ function createDailyLog(data, isFromRFID){
 					}
 
 					var seconds = (dateNow.getTime() - lastLog.getTime()) / 1000;
-					console.log('tmp: ', tmp);
-					console.log('date-now: ', dateNow.getTime());
-					console.log('last-log: ', lastLog.getTime());
-
-					console.log('seconds: ', seconds);
 
 					if(seconds > userLogInterval || tmp === undefined || tmp === null){
 						dateNow = dateNow.getDate().toString() + dateNow.getMonth().toString() + dateNow.getFullYear().toString();
@@ -488,6 +483,7 @@ function createDailyLog(data, isFromRFID){
 						dailyLog.set("lastName", result[0].attributes.lastName);
 						dailyLog.set("position", result[0].attributes.position);
 						dailyLog.set("idNumber", result[0].attributes.employeeId);
+						dailyLog.set("isCrossDate", result[0].attributes.isCrossDate);
 						dailyLog.set("employeeId", result[0].id);
 
 						if(result[0].attributes.isCheckedIn){
