@@ -116,8 +116,42 @@ app.get('/media-usb', function(req, res) {
 
 		}
 	});
+});
 
-
+app.get('/software-upgrade', function(req, res) {
+	var execOut = require('child_process').exec;
+	execOut('sudo mount /dev/sdb1 /media/usb-upgrade -o uid=pi,gid=pi', function(error, stdout, stderr) {
+		if (error !== null) {
+			console.log('exec error: ' + error);
+			res.json({ status: 301, message: 'error' });
+		}
+		else{
+			var exec = require('child_process').exec;
+			exec('sudo blkid', function(error, stdout, stderr) {
+				if (error !== null) {
+					console.log('exec error: ' + error);
+					res.json({ status: 301, message: 'error' });
+				}
+				else{
+					if(stringContains(stdout.toString(), '/dev/sdb')){
+						var exec1 = require('child_process').exec;
+						exec1('cp -R /media/usb-upgrade/alas-upgrade/dist ~/tas/parse-server-example', function(error, stdout, stderr) {
+							var exec1A = require('child_process').exec;
+							exec1A('cp /media/usb-upgrade/alas-upgrade/index.js ~/tas/parse-server-example', function(error, stdout, stderr) {
+								var exec2 = require('child_process').exec;
+								exec2('sudo umount /media/usb-upgrade', function(error, stdout, stderr) {
+									console.log('done');
+									res.json({ status: 200, message: 'success' });
+								});
+							});
+						});
+					} else{
+						res.json({ status: 301, message: 'error' });
+					}
+				}
+			});
+		}
+	});
 });
 
 app.get('/system-time/:time', function(req, res) {
@@ -323,7 +357,6 @@ var port = process.env.PORT || 1337;
 var httpServer = require('http').createServer(app);
 httpServer.listen(port, function() {
 	console.log('parse-server-example running on port ' + port + '.');
-	disableAltKey();
 });
 
 // This will enable the Live Query real-time server
@@ -492,33 +525,42 @@ function createDailyLog(data, isFromRFID){
 							currentEmployee.set("isCheckedIn", true);
 						}
 
-						if(result[0].attributes.currentPeriodLog.sequence === 0 && currentEmployee.attributes.endDateLog !== dateNow){
-							dailyLog.set("time", time + '- Log-In');
-						}else{
-							if(result[0].attributes.currentPeriodLog.sequence === 1){
-								if(currentEmployee.attributes.currentPeriodLog.createdDate !== dateNow){
-									dailyLog.set("time", time + '- Log-In');
-								}else{
-									dailyLog.set("time", time + '- Break-Out');
-								}
-								if(isTwoLogsEnable){
-									dailyLog.set("time", time + '- Log-Out');
-								}
+						if(currentEmployee.get('isCrossDate')){
 
-							}else if(result[0].attributes.currentPeriodLog.sequence === 2){
-								if(currentEmployee.attributes.currentPeriodLog.createdDate !== dateNow){
-									dailyLog.set("time", time + '- Log-In');
-								}else{
-									dailyLog.set("time", time + '- Break-In');
-								}
+							if(currentEmployee.attributes.currentPeriodLog.loginDate && !currentEmployee.attributes.currentPeriodLog.logoutDate){
+								dailyLog.set("time", time + '- Log-Out');
 							}else{
-								if(result[0].attributes.currentPeriodLog.id === null && currentEmployee.attributes.endDateLog !== null){
-									dailyLog.set("time", time + '-Extra Log');
-								}else{
+								dailyLog.set("time", time + '- Log-In');
+							}
+						}else{
+							if(result[0].attributes.currentPeriodLog.sequence === 0 && currentEmployee.attributes.endDateLog !== dateNow){
+								dailyLog.set("time", time + '- Log-In');
+							}else{
+								if(result[0].attributes.currentPeriodLog.sequence === 1){
 									if(currentEmployee.attributes.currentPeriodLog.createdDate !== dateNow){
 										dailyLog.set("time", time + '- Log-In');
 									}else{
+										dailyLog.set("time", time + '- Break-Out');
+									}
+									if(isTwoLogsEnable){
 										dailyLog.set("time", time + '- Log-Out');
+									}
+
+								}else if(result[0].attributes.currentPeriodLog.sequence === 2){
+									if(currentEmployee.attributes.currentPeriodLog.createdDate !== dateNow){
+										dailyLog.set("time", time + '- Log-In');
+									}else{
+										dailyLog.set("time", time + '- Break-In');
+									}
+								}else{
+									if(result[0].attributes.currentPeriodLog.id === null && currentEmployee.attributes.endDateLog !== null){
+										dailyLog.set("time", time + '-Extra Log');
+									}else{
+										if(currentEmployee.attributes.currentPeriodLog.createdDate !== dateNow){
+											dailyLog.set("time", time + '- Log-In');
+										}else{
+											dailyLog.set("time", time + '- Log-Out');
+										}
 									}
 								}
 							}
@@ -861,6 +903,9 @@ function getDateDiff(date1, date2){
 	date1 = date1.replace('h','');
 	date2 = date2.replace('h','');
 
+	date1 = [date1.slice(0, 2), ':', date1.slice(2)].join('');
+	date2 = [date2.slice(0, 2), ':', date2.slice(2)].join('');
+
 	var date1 = new Date(date1);
 	var date2 = new Date(date2);
 	var timeDiff = Math.abs(date2.getTime() - date1.getTime());
@@ -885,7 +930,7 @@ function converDateString(date){
 		minutes = '0' + minutes;
 	}
 
-	var convertedDate =  hours + ':' + minutes + 'h' + ' ' + (date.getMonth() + 1) + '/' + date.getDate() + '/' + date.getFullYear();
+	var convertedDate =  hours + minutes + 'h' + ' ' + (date.getMonth() + 1) + '/' + date.getDate() + '/' + date.getFullYear();
 
 	return convertedDate;
 }
