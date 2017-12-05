@@ -1,0 +1,20 @@
+DB
+
+1. EditRequestLog
+		- isArchive (boolean)
+		- status (string)
+2. DailyLog
+		- isCrossDate (boolean)
+
+3. Check Desktop Menus and folders
+		- check automount
+
+4. add /media/usb-upgrade
+
+5. first boot
+
+
+...
+
+/user/share/applications
+/usr/share/applications/piclone.desktop

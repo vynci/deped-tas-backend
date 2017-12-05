@@ -23,7 +23,7 @@ var api = new ParseServer({
 	masterKey: 'myMasterKey', //Add your master key here. Keep it secret!
 	javascriptKey: 'laserblackdog',
 	restAPIKey: 'myRestAPIKey',
-	maxUploadSize : '2mb',
+	maxUploadSize : '300kb',
 	serverURL: process.env.SERVER_URL || 'http://localhost:1337/parse',  // Don't forget to change to https if needed
 	liveQuery: {
 		classNames: ["Posts", "Comments"] // List of classes to support for query subscriptions
@@ -439,10 +439,13 @@ query.find({
 		isTwoLogsEnable = results[0].get('isTwoLogsEnable');
 		enableOvertimeOption = results[0].get('enableOvertimeOption');
 		enableRFID = results[0].get('enableRFID');
+		userLogInterval = results[0].get('userLogInterval');
 
 		if(enableRFID){
 			initiateRFID();
 		}
+
+		checkDatabaseSettings();
 
 		var j = schedule.scheduleJob(rule, function(){
 			console.log('system is backing up!');
@@ -875,6 +878,46 @@ function createDailyLog(data, isFromRFID){
 		});
 
 	}
+}
+
+function checkDatabaseSettings(){
+	var exec = require('child_process').exec;
+
+	fs.readFile('/etc/mongodb.conf', 'utf8', function (err,data) {
+		if (err) {
+			console.log(err);
+		}else{
+			if(data.indexOf('smallfiles') >= 0){
+				console.log('smallfiles exists, do nothing');
+			}else{
+				console.log('append small files');
+
+				exec('sudo chmod 777 /etc/mongodb.conf', function(error, stdout, stderr) {
+					if (error !== null) {
+						console.log('exec error: ' + error);
+					}
+					else{
+						fs.appendFile('/etc/mongodb.conf', 'smallfiles = true\n', function(error) {
+							if (error) {
+								console.log('Error:- ' + error);
+							}
+							console.log("smallfiles = true, data appended!!");
+
+							exec('sudo chmod 644 /etc/mongodb.conf', function(error, stdout, stderr) {
+								if (error !== null) {
+									console.log('exec error: ' + error);
+								}
+								else{
+									console.log('reset permissions on /etc/mongodb.conf');
+								}
+							});	
+
+						});						
+					}
+				});			
+			}
+		}
+	});	
 }
 
 function initiateRFID(){
