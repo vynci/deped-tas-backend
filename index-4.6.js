@@ -1,4 +1,4 @@
-// version 4.7
+// version 4.6
 
 var childProcess = require('child_process'),
 ls;
@@ -9,9 +9,9 @@ var fs = require('fs');
 var schedule = require('node-schedule');
 var exec = require('child_process').exec;
 var app = express();
-var Gpio = require('onoff').Gpio;
-var led = new Gpio(17, 'out');
-led.writeSync(1);
+// var Gpio = require('onoff').Gpio;
+// var led = new Gpio(17, 'out');
+// led.writeSync(1);
 
 var databaseUri = process.env.DATABASE_URI || process.env.MONGODB_URI;
 
@@ -182,13 +182,13 @@ app.get('/system-time/:time', function(req, res) {
 
 });
 
-app.get('/test-alarm', function(req, res) {
-	led.writeSync(0);
-	setTimeout(function(){ 
-		led.writeSync(1);
-		res.json({ message: 'Test alarm success' });
-	}, 3000);
-});
+// app.get('/test-alarm', function(req, res) {
+// 	led.writeSync(0);
+// 	setTimeout(function(){ 
+// 		led.writeSync(1);
+// 		res.json({ message: 'Test alarm success' });
+// 	}, 3000);
+// });
 
 app.get('/backup/:process', function(req, res) {
 
@@ -464,38 +464,37 @@ query.find({
 			deleteDailyLogs();
 		});
 
-		console.log(results[0].get('alarmBuzzer'));
-		processAlarmReccurency(results[0].get('alarmBuzzer'));
+		// processAlarmReccurency(results[0].get('alarmBuzzer'));
 	},
 	error: function(error) {
 		console("Error: " + error.code + " " + error.message);
 	}
 });
 
-function processAlarmReccurency(data){
-	data.forEach(function(sched) {
-		alarmBuzzer(sched.minute, sched.hour, sched.dayOfWeek, sched.duration);
-	});
-}
+// function processAlarmReccurency(data){
+// 	data.forEach(function(sched) {
+// 		alarmBuzzer(sched.minute, sched.hour, sched.dayOfWeek, sched.duration);
+// 	});
+// }
 
-function alarmBuzzer(minute, hour, day, duration) {
-	var alarm = new schedule.RecurrenceRule();
+// function alarmBuzzer(minute, hour, day, duration) {
+// 	var alarm = new schedule.RecurrenceRule();
 
-	alarm.hour = hour;
-	alarm.minute = minute;	
-	alarm.dayOfWeek = day;	
+// 	alarm.hour = hour;
+// 	alarm.minute = minute;	
+// 	alarm.dayOfWeek = day;	
 
-	console.log('alarms set: ', minute + ':' + hour + ':' + day);
+// 	console.log('alarms set: ', minute + ':' + hour + ':' + day);
 
-	var j = schedule.scheduleJob(alarm, function(){
-		console.log('system alarm - on');
-		led.writeSync(0);
-		setTimeout(function(){ 
-			led.writeSync(1);
-			console.log('system alarm - off');
-		}, duration || 2000);
-	});
-}
+// 	var j = schedule.scheduleJob(alarm, function(){
+// 		console.log('system alarm - on');
+// 		led.writeSync(0);
+// 		setTimeout(function(){ 
+// 			led.writeSync(1);
+// 			console.log('system alarm - off');
+// 		}, duration || 2000);
+// 	});
+// }
 
 ////
 
